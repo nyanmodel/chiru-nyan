@@ -64,7 +64,7 @@ async def on_voice_state_update(member, before, after):
     if member.guild.id == int(civ_union) and (before.channel != after.channel):
         print("CivVC発火")
         now = datetime.utcnow() + timedelta(hours=9)
-        alert_channel = bot.get_channel(civ_channel)
+        alert_channel = bot.get_channel(int(civ_channel))
 
         if before.channel is None: 
             embed = discord.Embed(
@@ -85,7 +85,7 @@ async def on_voice_state_update(member, before, after):
     if member.guild.id == int(unreal) and (before.channel != after.channel):
         print("UNREALVC発火")
         now = datetime.utcnow() + timedelta(hours=9)
-        alert_channel = bot.get_channel(unreal_vcstatus_channel)
+        alert_channel = bot.get_channel(int(unreal_vcstatus_channel))
 
         if before.channel is None: 
             embed = discord.Embed(
