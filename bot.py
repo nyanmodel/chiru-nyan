@@ -1,4 +1,3 @@
-from turtle import color, title
 import discord
 import random
 import os
