@@ -59,8 +59,10 @@ async def on_message(message):
     
 @bot.event
 async def on_voice_state_update(member, before, after):
+    print("VCUpdate発火")
     # Civ連合
     if member.guild.id == int(civ_union) and (before.channel != after.channel):
+        print("CivVC発火")
         now = datetime.utcnow() + timedelta(hours=9)
         alert_channel = bot.get_channel(civ_channel)
 
@@ -81,6 +83,7 @@ async def on_voice_state_update(member, before, after):
 
     # UNREAL
     if member.guild.id == int(unreal) and (before.channel != after.channel):
+        print("UNREALVC発火")
         now = datetime.utcnow() + timedelta(hours=9)
         alert_channel = bot.get_channel(unreal_vcstatus_channel)
 
