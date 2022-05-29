@@ -68,7 +68,7 @@ async def on_voice_state_update(member, before, after):
 
         if before.channel is None: 
             embed = discord.Embed(
-                timestamp=datetime.utcnow()
+                timestamp=datetime.utcnow(),
                 color=0x00ff00,
                 description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
             embed.set_author(name=member.name, icon_url=member.avatar_url)
@@ -88,14 +88,14 @@ async def on_voice_state_update(member, before, after):
 
         if before.channel is None: 
             embed = discord.Embed(
-                timestamp=datetime.utcnow()
+                timestamp=datetime.utcnow(),
                 color=0x00ff00,
                 description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
             embed.set_author(name=member.name, icon_url=member.avatar_url)
             await alert_channel.send(embed = embed)
         elif after.channel is None: 
             embed = discord.Embed(
-                timestamp=datetime.utcnow()
+                timestamp=datetime.utcnow(),
                 color=0xff0000,
                 description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
             embed.set_author(name=member.name, icon_url=member.avatar_url)
