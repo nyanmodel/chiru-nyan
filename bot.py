@@ -1,3 +1,4 @@
+from sqlite3 import Timestamp
 import discord
 import random
 import os
@@ -63,43 +64,41 @@ async def on_voice_state_update(member, before, after):
     # Civ連合
     if member.guild.id == int(civ_union) and (before.channel != after.channel):
         print("CivVC発火")
-        now = datetime.utcnow() + timedelta(hours=9)
         alert_channel = bot.get_channel(int(civ_channel))
 
         if before.channel is None: 
             embed = discord.Embed(
+                timestamp=datetime.utcnow()
                 color=0x00ff00,
                 description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
             embed.set_author(name=member.name, icon_url=member.avatar_url)
-            embed.set_footer(text=f'{now:%m/%d %H:%M} ')
             await alert_channel.send(embed = embed)
         elif after.channel is None: 
             embed = discord.Embed(
+                timestamp=datetime.utcnow(),
                 color=0xff0000,
                 description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
             embed.set_author(name=member.name, icon_url=member.avatar_url)
-            embed.set_footer(text=f'{now:%m/%d %H:%M} ')
             await alert_channel.send(embed = embed)
 
     # UNREAL
     if member.guild.id == int(unreal) and (before.channel != after.channel):
         print("UNREALVC発火")
-        now = datetime.utcnow() + timedelta(hours=9)
         alert_channel = bot.get_channel(int(unreal_vcstatus_channel))
 
         if before.channel is None: 
             embed = discord.Embed(
+                timestamp=datetime.utcnow()
                 color=0x00ff00,
                 description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
             embed.set_author(name=member.name, icon_url=member.avatar_url)
-            embed.set_footer(text=f'{now:%m/%d %H:%M} ')
             await alert_channel.send(embed = embed)
         elif after.channel is None: 
             embed = discord.Embed(
+                timestamp=datetime.utcnow()
                 color=0xff0000,
                 description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
             embed.set_author(name=member.name, icon_url=member.avatar_url)
-            embed.set_footer(text=f'{now:%m/%d %H:%M} ')
             await alert_channel.send(embed = embed)
 
 bot.run(TOKEN)
