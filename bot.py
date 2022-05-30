@@ -1,4 +1,3 @@
-from sqlite3 import Timestamp
 import discord
 import random
 import os
