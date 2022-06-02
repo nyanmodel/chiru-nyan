@@ -3,7 +3,6 @@ import random
 import os
 from discord.ext import commands
 from datetime import datetime, timedelta
-from janome.tokenizer import Tokenizer
 import os, re, json, random
 
 TOKEN = os.environ['MY_TOKEN']
