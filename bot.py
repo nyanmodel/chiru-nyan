@@ -129,7 +129,7 @@ async def on_message(message):
 
     if message.attachments:
         pass
-    else:
+    elif bot.user != message.author:
         usertext = message.content
         bottext = make_reply(usertext)
         await bot.send_message(message.channel, bottext)
