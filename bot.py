@@ -122,18 +122,21 @@ async def help(ctx):
 async def on_message(message):
     if message.author.bot:
         return 
+
     if message.content == "にゃん！":
         content = message.author.name + random.choice(greetarray)
         await message.channel.send(content)
+
+    if message.attachments:
+        pass
     else:
-        if message.attachments:
-            pass
-        else:
-            usertext = message.content
-            bottext = make_reply(usertext)
-            await bot.send_message(message.channel, bottext)
+        usertext = message.content
+        bottext = make_reply(usertext)
+        await bot.send_message(message.channel, bottext)
+
     await bot.process_commands(message)
-    
+
+
 @bot.event
 async def on_voice_state_update(member, before, after):
     print("VCUpdate発火")
