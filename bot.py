@@ -17,7 +17,7 @@ unreal = os.environ['unreal']
 unreal_vcstatus_channel = os.environ['unreal_vcstatus_channel']
 
 unreal19 = os.environ['unreal19']
-unreal19_vcstatus_channel = os.environ['unreal_vcstatus_channel']
+unreal19_vcstatus_channel = os.environ['unreal19_vcstatus_channel']
 
 bot = commands.Bot(command_prefix='~',help_command=None)
 greetarray = ["さん、こんにちは〜だよ！","さん、調子はどお？","さん、猫は好きですか？","さんにはあんまり返事したくないんだよね","さん、大好き！","さん、元気ですか？"]
