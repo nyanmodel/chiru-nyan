@@ -6,6 +6,7 @@ import re
 import json
 import sqlite3
 from datetime import datetime, timedelta
+from awake import awake
 
 TOKEN = os.environ['MY_TOKEN']
 CLIENT_ID = os.environ['MY_CLIENT_ID']
@@ -118,5 +119,5 @@ async def on_voice_state_update(member, before, after):
             embed.set_author(name=member.name, icon_url=member.avatar_url)
             await alert_channel.send(embed = embed)
 
-
+awake()
 bot.run(TOKEN)
