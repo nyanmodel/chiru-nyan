@@ -1,2 +1,3 @@
 discord.py==1.7.3
 Janome==0.4.2
+Flask==2.2.3
