@@ -70,7 +70,8 @@ async def on_voice_state_update(member, before, after):
         return
 
     # ログにどのサーバが発火したか残す
-    print(access_ignition_comment[member.guild.id])
+    server_ignition_comment = access_ignition_comment.get(member.guild.id, '登録されていないサーバーです')
+    print(server_ignition_comment)
 
     # member.guild.idに「int(サーバ名)」が入ってくる
     alert_channel = bot.get_channel(member.guild.id)
