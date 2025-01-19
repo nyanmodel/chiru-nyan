@@ -20,6 +20,12 @@ unreal_vcstatus_channel = os.environ['unreal_vcstatus_channel']
 unreal19 = os.environ['unreal19']
 unreal19_vcstatus_channel = os.environ['unreal19_vcstatus_channel']
 
+# 入退室関数発火時のサーバ別コメント
+access_ignition_comment = dict([
+    (int(civ_union), "CivVC発火"), 
+    (int(unreal), "UNREALVC発火"), 
+    (int(unreal19), "UNREAL19VC発火")])
+
 bot = commands.Bot(command_prefix='~',help_command=None)
 greetarray = ["さん、こんにちは〜だよ！","さん、調子はどお？","さん、猫は好きですか？","さんにはあんまり返事したくないんだよね","さん、大好き！","さん、元気ですか？"]
 
@@ -59,65 +65,30 @@ async def on_message(message):
 @bot.event
 async def on_voice_state_update(member, before, after):
     print("VCUpdate発火")
-    # Civ連合
-    if member.guild.id == int(civ_union) and (before.channel != after.channel):
-        print("CivVC発火")
-        alert_channel = bot.get_channel(int(civ_channel))
 
-        if before.channel is None: 
-            embed = discord.Embed(
-                timestamp=datetime.utcnow(),
-                color=0x00ff00,
-                description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
-            embed.set_author(name=member.name, icon_url=member.avatar_url)
-            await alert_channel.send(embed = embed)
-        elif after.channel is None: 
-            embed = discord.Embed(
-                timestamp=datetime.utcnow(),
-                color=0xff0000,
-                description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
-            embed.set_author(name=member.name, icon_url=member.avatar_url)
-            await alert_channel.send(embed = embed)
+    if(before.channel == after.channel):
+        return
 
-    # UNREAL
-    if member.guild.id == int(unreal) and (before.channel != after.channel):
-        print("UNREALVC発火")
-        alert_channel = bot.get_channel(int(unreal_vcstatus_channel))
+    # ログにどのサーバが発火したか残す
+    server_ignition_comment = access_ignition_comment.get(member.guild.id, '登録されていないサーバーです')
+    print(server_ignition_comment)
 
-        if before.channel is None: 
-            embed = discord.Embed(
-                timestamp=datetime.utcnow(),
-                color=0x00ff00,
-                description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
-            embed.set_author(name=member.name, icon_url=member.avatar_url)
-            await alert_channel.send(embed = embed)
-        elif after.channel is None: 
-            embed = discord.Embed(
-                timestamp=datetime.utcnow(),
-                color=0xff0000,
-                description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
-            embed.set_author(name=member.name, icon_url=member.avatar_url)
-            await alert_channel.send(embed = embed)
+    # member.guild.idに「int(サーバ名)」が入ってくる
+    alert_channel = bot.get_channel(member.guild.id)
 
-    # UNREAL 19
-    if member.guild.id == int(unreal19) and (before.channel != after.channel):
-        print("UNREAL19VC発火")
-        alert_channel = bot.get_channel(int(unreal19_vcstatus_channel))
-
-        if before.channel is None: 
-            embed = discord.Embed(
-                timestamp=datetime.utcnow(),
-                color=0x00ff00,
-                description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
-            embed.set_author(name=member.name, icon_url=member.avatar_url)
-            await alert_channel.send(embed = embed)
-        elif after.channel is None: 
-            embed = discord.Embed(
-                timestamp=datetime.utcnow(),
-                color=0xff0000,
-                description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
-            embed.set_author(name=member.name, icon_url=member.avatar_url)
-            await alert_channel.send(embed = embed)
+    if before.channel is None: 
+        embed = discord.Embed(
+            timestamp=datetime.utcnow(),
+            color=0x00ff00,
+            description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
+        embed.set_author(name=member.name, icon_url=member.avatar_url)
+    elif after.channel is None: 
+        embed = discord.Embed(
+            timestamp=datetime.utcnow(),
+            color=0xff0000,
+            description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
+        embed.set_author(name=member.name, icon_url=member.avatar_url)
+    await alert_channel.send(embed = embed)
 
 awake()
 bot.run(TOKEN)
