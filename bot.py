@@ -12,7 +12,7 @@ TOKEN = os.environ['MY_TOKEN']
 CLIENT_ID = os.environ['MY_CLIENT_ID']
 
 civ_union = os.environ['civ_union']
-civ_channel = os.environ['inform_channel']
+civ_vcstatus_channel = os.environ['civ_union_vcstatus_channel']
 
 unreal = os.environ['unreal']
 unreal_vcstatus_channel = os.environ['unreal_vcstatus_channel']
@@ -25,6 +25,12 @@ access_ignition_comment = dict([
     (int(civ_union), "CivVC発火"), 
     (int(unreal), "UNREALVC発火"), 
     (int(unreal19), "UNREAL19VC発火")])
+
+# 通知チャンネル辞書
+inform_channel = dict([
+    (int(civ_union), int(civ_vcstatus_channel)), 
+    (int(unreal), int(unreal_vcstatus_channel)), 
+    (int(unreal19), int(unreal19_vcstatus_channel))])
 
 bot = commands.Bot(command_prefix='~',help_command=None)
 greetarray = ["さん、こんにちは〜だよ！","さん、調子はどお？","さん、猫は好きですか？","さんにはあんまり返事したくないんだよね","さん、大好き！","さん、元気ですか？"]
@@ -46,7 +52,7 @@ async def help(ctx):
         準備中なのです。
         ''')
     embed.set_author(name="Chiru-Nyan! Help", icon_url=bot.user.avatar_url)
-    embed.set_footer(text=f'Childa BUNKYO 2023', icon_url="https://cdn.discordapp.com/app-icons/640478526507581440/203c3aeb1ea79c93ddb5efd9cb79ac11.png")
+    embed.set_footer(text=f'Childa BUNKYO 2025', icon_url="https://cdn.discordapp.com/app-icons/640478526507581440/203c3aeb1ea79c93ddb5efd9cb79ac11.png")
     await ctx.send(embed=embed)
 
 
@@ -74,7 +80,8 @@ async def on_voice_state_update(member, before, after):
     print(server_ignition_comment)
 
     # member.guild.idに「int(サーバ名)」が入ってくる
-    alert_channel = bot.get_channel(member.guild.id)
+    # member.guild.idに応じた通知チャンネルに投稿
+    alert_channel = bot.get_channel(inform_channel.get(member.guild.id, '登録されていないサーバーです'))
 
     if before.channel is None: 
         embed = discord.Embed(
