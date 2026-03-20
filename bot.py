@@ -95,6 +95,9 @@ async def on_voice_state_update(member, before, after):
             color=0xff0000,
             description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
         embed.set_author(name=member.name, icon_url=member.avatar_url)
+    elif before.channel is not None and after.channel is not None:
+    # チャンネル移動時はreturn
+        return
     await alert_channel.send(embed = embed)
 
 awake()
