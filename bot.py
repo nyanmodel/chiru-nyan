@@ -65,7 +65,7 @@ async def help(ctx):
         description='''
         準備中なのです。
         ''')
-    embed.set_author(name="Chiru-Nyan! Help", icon_url=bot.user.display_avatar.url)
+    embed.set_author(name="Chiru-Nyan! Help", icon_url=bot.user.avatar_url)
     embed.set_footer(text=f'Childa BUNKYO 2025', icon_url="https://cdn.discordapp.com/app-icons/640478526507581440/203c3aeb1ea79c93ddb5efd9cb79ac11.png")
     await ctx.send(embed=embed)
 
@@ -106,13 +106,13 @@ async def on_voice_state_update(member, before, after):
             timestamp=datetime.utcnow(),
             color=0x00ff00,
             description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
-        embed.set_author(name=member.name, icon_url=member.display_avatar.url)
+        embed.set_author(name=member.name, icon_url=member.avatar_url)
     elif after.channel is None: 
         embed = discord.Embed(
             timestamp=datetime.utcnow(),
             color=0xff0000,
             description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
-        embed.set_author(name=member.name, icon_url=member.display_avatar.url)
+        embed.set_author(name=member.name, icon_url=member.avatar_url)
     else:
     # チャンネル移動時などはreturn
         return
