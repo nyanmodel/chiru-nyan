@@ -1,2 +1,9 @@
 bot-local.py
 logs-local.txt
+node_modules/
+.env
+.env.*
+!.env.example
+recordings/
+__pycache__/
+.venv/

@@ -1,125 +1,144 @@
+"""ちるにゃん！の挨拶とボイスチャンネル入退室通知。"""
+
+import asyncio
+import logging
+import os
+import random
+import time
+from datetime import datetime, timezone
+
 import discord
 from discord.ext import commands
-import random
-import os
-from datetime import datetime
+
 from awake import awake
-import asyncio
-import time
 
-TOKEN = os.environ['MY_TOKEN']
-CLIENT_ID = os.environ['MY_CLIENT_ID']
-
-civ_union = os.environ['civ_union']
-civ_vcstatus_channel = os.environ['civ_union_vcstatus_channel']
-
-# unreal = os.environ['unreal']
-# unreal_vcstatus_channel = os.environ['unreal_vcstatus_channel']
-
-unreal19 = os.environ['unreal19']
-unreal19_vcstatus_channel = os.environ['unreal19_vcstatus_channel']
-
-# 入退室関数発火時のサーバ別コメント
-access_ignition_comment = dict([
-    (int(civ_union), "civ_union_vc_update発火"), 
-    # (int(unreal), "UNREAL_vc_update発火"), 
-    (int(unreal19), "UNREAL19_vc_update発火")])
-
-# 通知チャンネル辞書
-inform_channel = dict([
-    (int(civ_union), int(civ_vcstatus_channel)), 
-    # (int(unreal), int(unreal_vcstatus_channel)), 
-    (int(unreal19), int(unreal19_vcstatus_channel))])
-
-bot = commands.Bot(command_prefix='~',help_command=None)
-greetarray = ["さん、こんにちは〜だよ！","さん、調子はどお？","さん、猫は好きですか？","さんにはあんまり返事したくないんだよね","さん、大好き！","さん、元気ですか？"]
-
-# 大量リクエスト対策その1
-bot_start_time = None
-
-@bot.event
-async def on_ready():
-    global bot_start_time
-    bot_start_time = time.time()
-
-@bot.event
-async def on_voice_state_update(member, before, after):
-    # 起動直後5秒以内のイベントは滞留分としてスキップ
-    if bot_start_time and (time.time() - bot_start_time) < 5:
-        return
-
-@bot.event
-async def on_ready():
-    print("Chiru-Nyan! is ready!")
-    print(bot.user.name)
-    print(bot.user.id)
-    print(discord.__version__)
-    print('------')
-    await bot.change_presence(activity=discord.Game(name="Python"))
+logger = logging.getLogger(__name__)
+GREETINGS = ["さん、こんにちは〜だよ！", "さん、調子はどお？", "さん、猫は好きですか？",
+             "さんにはあんまり返事したくないんだよね", "さん、大好き！", "さん、元気ですか？"]
+STARTUP_GRACE_SECONDS = 5
+NOTIFICATION_INTERVAL_SECONDS = 0.5
 
 
-@bot.command()
-async def help(ctx):
-    embed = discord.Embed(
-        color=0x53BBD3,
-        description='''
-        準備中なのです。
-        ''')
-    embed.set_author(name="Chiru-Nyan! Help", icon_url=bot.user.avatar_url)
-    embed.set_footer(text=f'Childa BUNKYO 2025', icon_url="https://cdn.discordapp.com/app-icons/640478526507581440/203c3aeb1ea79c93ddb5efd9cb79ac11.png")
-    await ctx.send(embed=embed)
+# 環境変数からサーバーと通知先のIDを読み込み、設定の不足や誤りを確認する。
+def load_channels(environ):
+    channels = {}
+    for name in ("civ_union", "unreal19", "unreal"):
+        guild = environ.get(name)
+        channel = environ.get(f"{name}_vcstatus_channel")
+        if not guild and not channel:
+            continue
+        try:
+            guild_id, channel_id = int(guild or ""), int(channel or "")
+            if guild_id <= 0 or channel_id <= 0:
+                raise ValueError
+        except ValueError:
+            raise ValueError(f"{name} と {name}_vcstatus_channel に正の整数IDを設定してください") from None
+        if guild_id in channels:
+            raise ValueError(f"{name}: サーバーIDが重複しています")
+        channels[guild_id] = channel_id
+    if not channels:
+        raise ValueError("通知先サーバーとチャンネルを1組以上設定してください")
+    return channels
 
 
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return 
+class ChiruBot(commands.Bot):
+    # Botが受け取るイベント、コマンド、通知先と送信間隔の管理を準備する。
+    def __init__(self, channels):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(command_prefix="~", help_command=None, intents=intents,
+                         allowed_mentions=discord.AllowedMentions.none())
+        self.inform_channels = dict(channels)
+        self.ready_at = None
+        self.notification_locks = {guild: asyncio.Lock() for guild in channels}
+        self.last_notification = {}
+        # 「~help」が呼ばれたら、ヘルプの送信処理へ渡す。
+        @self.command(name="help")
+        async def help_command(ctx):
+            await self.send_help(ctx)
 
-    if message.content == "にゃん！":
-        content = message.author.name + random.choice(greetarray)
-        await message.channel.send(content)
+    # 接続準備が完了した時刻を記録し、ログとBotのプレイ中表示を更新する。
+    async def on_ready(self):
+        self.ready_at = time.monotonic()
+        logger.info("Chiru-Nyan! is ready! user=%s discord.py=%s", self.user, discord.__version__)
+        await self.change_presence(activity=discord.Game(name="Python"))
 
-    await bot.process_commands(message)
+    # 接続が切れたら、入退室通知を抑制する状態に戻す。
+    async def on_disconnect(self):
+        self.ready_at = None
+
+    # 接続が再開した時刻を記録し、直後5秒間の通知抑制を始める。
+    async def on_resumed(self):
+        self.ready_at = time.monotonic()
+
+    # Botの使い方を埋め込みメッセージにして、コマンドが送られた場所へ返す。
+    async def send_help(self, ctx):
+        embed = discord.Embed(color=0x53BBD3, description="「にゃん！」でご挨拶するよ！\nボイスチャンネルの入退室もお知らせするよ。")
+        embed.set_author(name="Chiru-Nyan! Help", icon_url=self.user.display_avatar.url)
+        embed.set_footer(text=f"Childa BUNKYO {datetime.now(timezone.utc).year}")
+        await ctx.send(embed=embed)
+
+    # Bot以外の「にゃん！」に挨拶し、「~」で始まるコマンドも処理する。
+    async def on_message(self, message):
+        if message.author.bot:
+            return
+        if message.content == "にゃん！":
+            await message.channel.send(message.author.name + random.choice(GREETINGS))
+        await self.process_commands(message)
+
+    # VCの入退室を判定し、設定されたチャンネルへ送信間隔を空けて通知する。
+    async def on_voice_state_update(self, member, before, after):
+        # 接続準備中と、接続・再接続直後5秒のイベントを抑制する。
+        if self.ready_at is None or time.monotonic() - self.ready_at < STARTUP_GRACE_SECONDS:
+            return
+        if before.channel == after.channel:
+            return
+        # VC間の移動は通知対象外。
+        if before.channel is not None and after.channel is not None:
+            return
+        channel_id = self.inform_channels.get(member.guild.id)
+        if channel_id is None:
+            return
+        alert_channel = self.get_channel(channel_id)
+        if (alert_channel is None or not hasattr(alert_channel, "send")
+                or alert_channel.guild.id != member.guild.id):
+            logger.warning("通知チャンネルが見つかりません: guild_id=%s channel_id=%s", member.guild.id, channel_id)
+            return
+
+        if before.channel is None:
+            color = 0x00FF00
+            description = f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？'
+        else:
+            color = 0xFF0000
+            description = f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？'
+        embed = discord.Embed(timestamp=datetime.now(timezone.utc), color=color, description=description)
+        embed.set_author(name=member.name, icon_url=member.display_avatar.url)
+
+        # 同じサーバーの送信を直列化し、前回の送信完了から0.5秒以上空ける。
+        async with self.notification_locks[member.guild.id]:
+            previous = self.last_notification.get(member.guild.id)
+            if previous is not None:
+                delay = NOTIFICATION_INTERVAL_SECONDS - (time.monotonic() - previous)
+                if delay > 0:
+                    await asyncio.sleep(delay)
+            try:
+                await alert_channel.send(embed=embed)
+            except discord.HTTPException:
+                logger.exception("入退室通知を送信できません: guild_id=%s", member.guild.id)
+            finally:
+                self.last_notification[member.guild.id] = time.monotonic()
 
 
-@bot.event
-async def on_voice_state_update(member, before, after):
-    print("on_voicd_state_update発火")
+# トークンと通知先を確認して、HTTPサーバーとDiscord Botを起動する。
+def main():
+    logging.basicConfig(level=logging.INFO)
+    token = os.environ.get("MY_TOKEN", "").strip()
+    if not token:
+        raise ValueError("MY_TOKEN を設定してください")
+    bot = ChiruBot(load_channels(os.environ))
+    awake()
+    bot.run(token)
 
-    if(before.channel == after.channel):
-        return
 
-    # ログにどのサーバが発火したか残す
-    server_ignition_comment = access_ignition_comment.get(member.guild.id, '登録されていないサーバーです')
-    print(server_ignition_comment)
-
-    # member.guild.idに「int(サーバ名)」が入ってくる
-    # member.guild.idに応じた通知チャンネルに投稿
-    alert_channel = bot.get_channel(inform_channel.get(member.guild.id))
-
-    if alert_channel is None:
-        print(f"通知チャンネルが見つかりません： guild_id={member.guild.id}")
-        return
-
-    if before.channel is None: 
-        embed = discord.Embed(
-            timestamp=datetime.utcnow(),
-            color=0x00ff00,
-            description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
-        embed.set_author(name=member.name, icon_url=member.avatar_url)
-    elif after.channel is None: 
-        embed = discord.Embed(
-            timestamp=datetime.utcnow(),
-            color=0xff0000,
-            description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
-        embed.set_author(name=member.name, icon_url=member.avatar_url)
-    else:
-    # チャンネル移動時などはreturn
-        return
-    
-    # 大量リクエスト対策その2
-    await asyncio.sleep(0.5)
-    await alert_channel.send(embed = embed)
-
-awake()
-bot.run(TOKEN)
+if __name__ == "__main__":
+    main()
