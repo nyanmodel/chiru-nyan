@@ -1,125 +1,160 @@
-import discord
-from discord.ext import commands
-import random
-import os
-from datetime import datetime
-from awake import awake
 import asyncio
+from contextlib import suppress
+from dataclasses import dataclass
+from datetime import datetime, timezone
+import logging
+import os
+import random
 import time
 
-TOKEN = os.environ['MY_TOKEN']
-CLIENT_ID = os.environ['MY_CLIENT_ID']
+import discord
+from discord.ext import commands
 
-civ_union = os.environ['civ_union']
-civ_vcstatus_channel = os.environ['civ_union_vcstatus_channel']
-
-# unreal = os.environ['unreal']
-# unreal_vcstatus_channel = os.environ['unreal_vcstatus_channel']
-
-unreal19 = os.environ['unreal19']
-unreal19_vcstatus_channel = os.environ['unreal19_vcstatus_channel']
-
-# 入退室関数発火時のサーバ別コメント
-access_ignition_comment = dict([
-    (int(civ_union), "civ_union_vc_update発火"), 
-    # (int(unreal), "UNREAL_vc_update発火"), 
-    (int(unreal19), "UNREAL19_vc_update発火")])
-
-# 通知チャンネル辞書
-inform_channel = dict([
-    (int(civ_union), int(civ_vcstatus_channel)), 
-    # (int(unreal), int(unreal_vcstatus_channel)), 
-    (int(unreal19), int(unreal19_vcstatus_channel))])
-
-bot = commands.Bot(command_prefix='~',help_command=None)
-greetarray = ["さん、こんにちは〜だよ！","さん、調子はどお？","さん、猫は好きですか？","さんにはあんまり返事したくないんだよね","さん、大好き！","さん、元気ですか？"]
-
-# 大量リクエスト対策その1
-bot_start_time = None
-
-@bot.event
-async def on_ready():
-    global bot_start_time
-    bot_start_time = time.time()
-
-@bot.event
-async def on_voice_state_update(member, before, after):
-    # 起動直後5秒以内のイベントは滞留分としてスキップ
-    if bot_start_time and (time.time() - bot_start_time) < 5:
-        return
-
-@bot.event
-async def on_ready():
-    print("Chiru-Nyan! is ready!")
-    print(bot.user.name)
-    print(bot.user.id)
-    print(discord.__version__)
-    print('------')
-    await bot.change_presence(activity=discord.Game(name="Python"))
+logger = logging.getLogger(__name__)
+GREETINGS = [
+    "さん、こんにちは〜だよ！", "さん、調子はどお？", "さん、猫は好きですか？",
+    "さんにはあんまり返事したくないんだよね", "さん、大好き！", "さん、元気ですか？",
+]
 
 
-@bot.command()
-async def help(ctx):
-    embed = discord.Embed(
-        color=0x53BBD3,
-        description='''
-        準備中なのです。
-        ''')
-    embed.set_author(name="Chiru-Nyan! Help", icon_url=bot.user.avatar_url)
-    embed.set_footer(text=f'Childa BUNKYO 2025', icon_url="https://cdn.discordapp.com/app-icons/640478526507581440/203c3aeb1ea79c93ddb5efd9cb79ac11.png")
-    await ctx.send(embed=embed)
+@dataclass(frozen=True)
+class Settings:
+    token: str
+    notification_channels: dict[int, int]
+
+    @classmethod
+    def from_env(cls):
+        def required(name):
+            value = os.environ.get(name, '').strip()
+            if not value:
+                raise ValueError(f'環境変数 {name} を設定してください')
+            return value
+
+        channels = {}
+        for guild_key, channel_key in (
+            ('civ_union', 'civ_union_vcstatus_channel'),
+            ('unreal19', 'unreal19_vcstatus_channel'),
+        ):
+            ids = []
+            for name in (guild_key, channel_key):
+                try:
+                    value = int(required(name))
+                    if value <= 0:
+                        raise ValueError
+                except ValueError:
+                    raise ValueError(f'環境変数 {name} には正の整数IDを設定してください') from None
+                ids.append(value)
+            if ids[0] in channels:
+                raise ValueError('サーバーIDが重複しています')
+            channels[ids[0]] = ids[1]
+        return cls(token=required('MY_TOKEN'), notification_channels=channels)
 
 
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return 
-
-    if message.content == "にゃん！":
-        content = message.author.name + random.choice(greetarray)
-        await message.channel.send(content)
-
-    await bot.process_commands(message)
-
-
-@bot.event
-async def on_voice_state_update(member, before, after):
-    print("on_voicd_state_update発火")
-
-    if(before.channel == after.channel):
-        return
-
-    # ログにどのサーバが発火したか残す
-    server_ignition_comment = access_ignition_comment.get(member.guild.id, '登録されていないサーバーです')
-    print(server_ignition_comment)
-
-    # member.guild.idに「int(サーバ名)」が入ってくる
-    # member.guild.idに応じた通知チャンネルに投稿
-    alert_channel = bot.get_channel(inform_channel.get(member.guild.id))
-
-    if alert_channel is None:
-        print(f"通知チャンネルが見つかりません： guild_id={member.guild.id}")
-        return
-
-    if before.channel is None: 
-        embed = discord.Embed(
-            timestamp=datetime.utcnow(),
-            color=0x00ff00,
-            description=f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？')
-        embed.set_author(name=member.name, icon_url=member.avatar_url)
-    elif after.channel is None: 
-        embed = discord.Embed(
-            timestamp=datetime.utcnow(),
-            color=0xff0000,
-            description=f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？')
-        embed.set_author(name=member.name, icon_url=member.avatar_url)
+def build_voice_embed(member, before, after):
+    if before.channel == after.channel:
+        return None
+    if before.channel is None:
+        color = 0x00ff00
+        description = f':inbox_tray: **{member.name}** が :loud_sound: `{after.channel.name}` にいるよ！みんなも参加、どう？'
+    elif after.channel is None:
+        color = 0xff0000
+        description = f':outbox_tray: **{member.name}** が :loud_sound: `{before.channel.name}` から退出だ！おやすみなさいかな？'
     else:
-    # チャンネル移動時などはreturn
-        return
-    
-    # 大量リクエスト対策その2
-    await asyncio.sleep(0.5)
-    await alert_channel.send(embed = embed)
+        return None
+    embed = discord.Embed(timestamp=datetime.now(timezone.utc), color=color, description=description)
+    embed.set_author(name=member.name, icon_url=member.display_avatar.url)
+    return embed
 
-awake()
-bot.run(TOKEN)
+
+class ChiruBot(commands.Bot):
+    def __init__(self, notification_channels):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.voice_states = True
+        super().__init__(command_prefix='~', help_command=None, intents=intents)
+        self.notification_channels = dict(notification_channels)
+        self.notifications = asyncio.Queue(maxsize=1000)
+        self.notification_task = None
+        self.ready_at = None
+        self.startup_grace = 5.0
+        self.notification_interval = 0.5
+        @self.command(name='help')
+        async def help_command(ctx):
+            await self.send_help_message(ctx)
+
+    async def setup_hook(self):
+        self.notification_task = asyncio.create_task(self.send_notifications())
+
+    async def close(self):
+        if self.notification_task is not None:
+            self.notification_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self.notification_task
+        await super().close()
+
+    async def on_ready(self):
+        # READY can also occur after a reconnect; apply the grace period again.
+        self.ready_at = time.monotonic()
+        logger.info('Chiru-Nyan! is ready! user=%s discord.py=%s', self.user, discord.__version__)
+        await self.change_presence(activity=discord.Game(name='Python'))
+
+    async def send_help_message(self, ctx):
+        embed = discord.Embed(color=0x53BBD3, description='準備中なのです。')
+        embed.set_author(name='Chiru-Nyan! Help', icon_url=self.user.display_avatar.url)
+        embed.set_footer(
+            text='Childa BUNKYO 2025',
+            icon_url='https://cdn.discordapp.com/app-icons/640478526507581440/203c3aeb1ea79c93ddb5efd9cb79ac11.png',
+        )
+        await ctx.send(embed=embed)
+
+    async def on_message(self, message):
+        if message.author.bot:
+            return
+        if message.content == 'にゃん！':
+            await message.channel.send(message.author.name + random.choice(GREETINGS))
+        await self.process_commands(message)
+
+    async def on_voice_state_update(self, member, before, after):
+        if self.ready_at is None or time.monotonic() - self.ready_at < self.startup_grace:
+            return
+        channel_id = self.notification_channels.get(member.guild.id)
+        if channel_id is None:
+            return
+        embed = build_voice_embed(member, before, after)
+        if embed is None:
+            return
+        try:
+            self.notifications.put_nowait((channel_id, embed))
+        except asyncio.QueueFull:
+            logger.warning('通知キューが満杯です：guild_id=%s', member.guild.id)
+
+    async def send_notifications(self):
+        await self.wait_until_ready()
+        while True:
+            channel_id, embed = await self.notifications.get()
+            try:
+                channel = self.get_channel(channel_id)
+                if channel is None:
+                    logger.warning('通知チャンネルが見つかりません：channel_id=%s', channel_id)
+                else:
+                    await channel.send(embed=embed)
+            except discord.HTTPException:
+                # One failed notification must not stop subsequent sends.
+                logger.exception('通知の送信に失敗しました：channel_id=%s', channel_id)
+            finally:
+                self.notifications.task_done()
+            await asyncio.sleep(self.notification_interval)
+
+
+def main():
+    logging.basicConfig(level=logging.INFO)
+    settings = Settings.from_env()
+    from awake import awake
+
+    bot = ChiruBot(settings.notification_channels)
+    awake()
+    bot.run(settings.token)
+
+
+if __name__ == '__main__':
+    main()
