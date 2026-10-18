@@ -1,2 +1,4 @@
 bot-local.py
 logs-local.txt
+__pycache__/
+*.py[cod]
